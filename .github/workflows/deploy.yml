@@ -33,10 +33,7 @@ jobs:
           # Assets
           cp -r css js fonts images public/
           # Fichiers GitHub Pages
-          # NOTE: CNAME temporairement desactive pour exposer l'URL github.io
-          # (preview client). Reactiver en decommentant la ligne ci-dessous.
-          # cp CNAME public/
-          cp .nojekyll public/
+          cp CNAME .nojekyll public/
 
       - uses: actions/upload-pages-artifact@v3
         with:
