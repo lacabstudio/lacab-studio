@@ -1466,6 +1466,15 @@ figcaption {
   padding: .5rem;
 }
 
+.navbar1_menu-dropdown.in-footer .navbar1_dropdown-list.w--open {
+  background-color: #000;
+  border: 1px solid #fff;
+}
+
+.navbar1_menu-dropdown.in-footer .navbar1_dropdown-link {
+  color: var(--white);
+}
+
 .navbar1_menu-buttons {
   grid-column-gap: 1rem;
   grid-row-gap: 1rem;
