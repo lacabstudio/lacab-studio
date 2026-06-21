@@ -1,98 +1,64 @@
-# LaCab Studio — Suite du déploiement (à reprendre après validation client)
+# LaCab Studio — État du déploiement & maintenance
 
-> État au 19/06/2026 : le site est en ligne en **preview** sur GitHub Pages, en attente de
-> validation client. Le nom de domaine n'a **pas encore** été basculé : `www.lacabstudio.fr`
-> pointe toujours vers l'ancien site Webflow.
+> **Bascule terminée le 21/06/2026.** Le site est en ligne en production sur
+> **https://www.lacabstudio.fr**, servi par **GitHub Pages** (export statique Webflow).
+> Le domaine ne pointe plus vers Webflow.
 
 ---
 
-## 📍 Où en est-on
+## 📍 État actuel
 
 | Élément | Valeur |
 |---|---|
 | Dépôt GitHub | `lacabstudio/lacab-studio` (public) |
 | Compte gh authentifié | `lacabstudio` |
-| **URL de preview (à partager au client)** | **https://lacabstudio.github.io/lacab-studio/** |
-| Domaine final visé | `www.lacabstudio.fr` (racine `lacabstudio.fr` → redirige vers www) |
+| URL de production | **https://www.lacabstudio.fr** |
+| Apex `lacabstudio.fr` | redirige (301) vers `www` |
 | Registrar / gestion DNS | **Infomaniak** (manager.infomaniak.com) |
-| Site Webflow | **toujours en ligne** sur le domaine, intact |
+| Site Webflow | domaine personnalisé retiré du projet ✔ |
 
-Le `CNAME` (custom domain) est **temporairement désactivé** pour que l'URL github.io reste
-consultable. Concrètement, dans `.github/workflows/deploy.yml`, la ligne qui copie le `CNAME`
-est commentée. Le fichier `CNAME` lui-même est conservé dans le dépôt.
+**Zone DNS Infomaniak (état final) :**
+
+```
+NS     lacabstudio.fr   ns41.infomaniak.com
+NS     lacabstudio.fr   ns42.infomaniak.com
+A      @                185.199.108.153
+A      @                185.199.109.153
+A      @                185.199.110.153
+A      @                185.199.111.153
+CNAME  www              lacabstudio.github.io.
+```
+
+> Pas d'enregistrements `AAAA` (GitHub Pages = IPv4 uniquement, c'est voulu).
+> Les anciens enregistrements Webflow (A `@` → 198.202.211.1, CNAME `www` → cdn.webflow.com,
+> TXT `_webflow`) ont été supprimés.
 
 ---
 
-## ✅ Étapes restantes (dans l'ordre)
+## ✅ Étapes réalisées
 
-### Étape 1 — Le client a validé → réactiver le domaine côté GitHub
-*(Claude peut faire cette étape : dire « le client a validé, réactive le domaine ».)*
+1. **Custom domain réactivé côté GitHub** — workflow `deploy.yml` copie de nouveau le `CNAME`,
+   et `gh api ... pages -f cname=www.lacabstudio.fr` posé.
+2. **DNS configurés chez Infomaniak** — 4 A + CNAME www (voir tableau ci-dessus).
+3. **Propagation vérifiée** — `www` et apex renvoient les IP GitHub sur les resolvers publics ;
+   site servi en HTTPS 200.
+4. **Domaine retiré du projet Webflow** — plus de conflit / facturation hébergement Webflow.
 
-Dans `.github/workflows/deploy.yml`, remplacer le bloc :
-```yaml
-          # NOTE: CNAME temporairement desactive pour exposer l'URL github.io
-          # (preview client). Reactiver en decommentant la ligne ci-dessous.
-          # cp CNAME public/
-          cp .nojekyll public/
-```
-par :
-```yaml
-          cp CNAME .nojekyll public/
-```
-Puis :
+### ⏳ Dernier point en cours : Enforce HTTPS
+
+Le « Enforce HTTPS » nécessite que GitHub ait émis le certificat TLS du domaine (peut prendre
+jusqu'à ~1 h après la bascule DNS). Tant que le certificat n'existe pas, l'API renvoie
+`certificate does not exist yet`. Une fois prêt :
+
 ```bash
-git add .github/workflows/deploy.yml
-git commit -m "Reactiver le custom domain www.lacabstudio.fr"
-git push origin main
-gh api -X PUT repos/lacabstudio/lacab-studio/pages -f cname=www.lacabstudio.fr
+gh api -X PUT repos/lacabstudio/lacab-studio/pages -F https_enforced=true
 ```
-
-### Étape 2 — Configurer les DNS chez Infomaniak
-*(À faire par toi sur manager.infomaniak.com — Claude n'y a pas accès.)*
-
-1. **manager.infomaniak.com** → **Domaines** → **lacabstudio.fr** → onglet **Zone DNS**.
-2. **Supprimer** les anciens enregistrements pointant vers Webflow :
-   - le(s) `A` sur `@` vers une IP Webflow,
-   - le `CNAME` sur `www` vers `proxy-ssl.webflow.com` (ou similaire).
-   - ⚠️ **Ne pas toucher** aux `MX` (emails) ni aux `TXT`.
-3. **Ajouter** le CNAME pour `www` :
-   | Type | Nom | Cible |
-   |---|---|---|
-   | CNAME | `www` | `lacabstudio.github.io.` |
-4. **Ajouter** les 4 enregistrements A sur `@` (racine) :
-   | Type | Nom | Cible |
-   |---|---|---|
-   | A | `@` | `185.199.108.153` |
-   | A | `@` | `185.199.109.153` |
-   | A | `@` | `185.199.110.153` |
-   | A | `@` | `185.199.111.153` |
-5. **Enregistrer**. Propagation DNS : de quelques minutes à 24-48 h.
-
-### Étape 3 — Vérifier la propagation + activer HTTPS
-*(Claude peut faire cette étape une fois les DNS posés : dire « les DNS sont en place ».)*
-
-Vérifs (manuelles ou par Claude) :
-```bash
-dig +short www.lacabstudio.fr        # doit montrer lacabstudio.github.io / IPs GitHub
-dig +short lacabstudio.fr            # doit montrer les IP 185.199.108-111.153
-curl -sI https://www.lacabstudio.fr  # doit servir le nouveau site (200)
-```
-Quand GitHub a validé le domaine, forcer le HTTPS :
-```bash
-gh api -X PUT repos/lacabstudio/lacab-studio/pages -f https_enforced=true
-```
+⚠️ Utiliser `-F` (booléen typé), **pas** `-f` (qui envoie une chaîne → erreur 422).
 (ou Settings → Pages → cocher « Enforce HTTPS »).
 
-### Étape 4 — Nettoyer côté Webflow
-*(À faire par toi.)*
-
-Une fois `www.lacabstudio.fr` servi par GitHub Pages :
-- Retirer le domaine personnalisé du projet Webflow (éviter conflit / facturation du plan hébergé).
-- Garder le projet Webflow en mode édition si besoin de réexporter plus tard.
-
 ---
 
-## 🔁 Comment mettre à jour le site plus tard
+## 🔁 Mettre à jour le site
 
 Le site se redéploie **automatiquement** à chaque `git push` sur `main` (via GitHub Actions).
 Pour modifier le contenu : éditer les fichiers HTML/CSS/images, puis :
@@ -106,7 +72,12 @@ git add -A && git commit -m "..." && git push origin main
 - **Noms de fichiers images** : rester en **ASCII** (pas d'accents). Les accents cassent sur
   GitHub Pages (bug NFC/NFD déjà corrigé pour les fichiers « bulletin »).
 - **Lightbox** : les `url` des images plein écran doivent être des **chemins relatifs**
-  (`../images/...`), pas des URL absolues — sinon elles chargent à l'infini tant que le
-  domaine n'est pas en place.
+  (`../images/...`), pas des URL absolues.
 - Les balises `og:image` / `twitter:image` / `JSON-LD` utilisent volontairement des **URL
   absolues** `https://www.lacabstudio.fr/...` (correct pour le partage social / SEO).
+
+**Piège cache DNS local :** après la bascule, ton réseau local (box / partage de connexion)
+peut continuer à afficher l'ancien site Webflow en cache (TTL 12 h) alors que tout le reste
+d'internet voit déjà GitHub. Pour vérifier sans le cache : tester en 4G/5G, ou
+`dig +short www.lacabstudio.fr @8.8.8.8`. Flush macOS :
+`sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder`.
